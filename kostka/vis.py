@@ -54,6 +54,7 @@ while True:
             clicked_sprites = [s for s in all_sprites if s.rect.collidepoint(clicked_pos)]
             for clicked_sprite in clicked_sprites:
                 clicked_sprite.image.fill(COLOR_GREEN)
+    screen.fill((0, 0, 0))
     all_sprites.draw(screen)
     mouse_x, mouse_y = pygame.mouse.get_pos()
     print_text(screen, "Mouse position: X: %d, Y: %d" % (mouse_x, mouse_y), (WIDTH/2, 16))
