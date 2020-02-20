@@ -60,29 +60,84 @@ int main(int argc, char* argv[]) {
     libs[il].read(score);
   }
   
-  auto estimate = [&](vector<int> order) {
-    int would = 0;
-    int day = 0;
-    for(int il : order) {
-      day += libs[il].signup_time;
-      if(day >= D) {
-        break;
-      }
-      long long _can = (long long) libs[il].per_day * (D - day);
-      // assert(_can <= 1000 * 1000 * 1000);
-      int can = min(1000LL * 1000 * 1000, _can);
-      can = min(can, (int) libs[il].books.size());
-      would += libs[il].sorted[can-1];
+  
+  vector<int> all_books(B);
+  for(int i = 0; i < B; ++i) {
+    all_books[i] = i;
+  }
+  sort(all_books.begin(), all_books.end(), [&](int a, int b) {
+    return score[a] > score[b];
+  });
+  vector<vector<int>> where_is(B);
+  for(int il = 0; il < L; ++il) {
+    for(int b : libs[il].books) {
+      where_is[b].push_back(il);
     }
-    return would;
+  }
+  
+  auto estimate = [&](const vector<int>& order, bool exact) {
+    if(!exact) {
+      int would = 0;
+      int day = 0;
+      for(int il : order) {
+        day += libs[il].signup_time;
+        if(day >= D) {
+          break;
+        }
+        long long _can = (long long) libs[il].per_day * (D - day);
+        // assert(_can <= 1000 * 1000 * 1000);
+        int can = min(1000LL * 1000 * 1000, _can);
+        can = min(can, (int) llround(libs[il].books.size() * 0.95));
+        would += libs[il].sorted[can-1];
+      }
+      return would;
+    }
+    
+          vector<pair<int,int>> stats(L);
+        {
+          int day = 0;
+          for(int il : order) {
+            day += libs[il].signup_time;
+            if(day >= D) {
+              break;
+            }
+            int can = min(1000LL * 1000, (long long) libs[il].per_day * (D - day));
+            stats[il] = make_pair(can, libs[il].books.size());
+          }
+        }
+        
+        vector<vector<int>> his_books(L);
+        long long total_score = 0;
+        for(int b : all_books) {
+          pair<int,int> best{INT_MIN, INT_MIN};
+          for(int il : where_is[b]) {
+            if(stats[il].first > 0) {
+              best = max(best, make_pair(stats[il].first - stats[il].second, il));
+            }
+          }
+          if(best.first == INT_MIN) {
+            continue;
+          }
+          int il = best.second;
+          total_score += score[b];
+          his_books[il].push_back(b);
+          stats[il].first--;
+          for(int il : where_is[b]) {
+            stats[il].second--;
+          }
+        }
+        return (int) total_score;
+    
+    
   };
   
   vector<int> order;
   vector<bool> ready(L);
   long long current_score = 0;
-  for(int rep = 0; rep < 800000; ++rep) {
+  const int times = 330 * 1000 * 1000LL / L;
+  for(int rep = 0; rep < times; ++rep) {
     vector<int> new_order = order;
-    int type = rand() % 4;
+    int type = rand() % 5;
     if(type == 0) {
       // insert
       int i = rand() % L;
@@ -105,19 +160,19 @@ int main(int argc, char* argv[]) {
       }
       int i = rand() % order.size();
       int j = rand() % order.size();
-      pair<int, pair<int,int>> best;
-      best = make_pair(INT_MAX, make_pair(0, 0));
-      for(int rep = 0; rep < 3; ++rep) {
-        i = rand() % order.size();
-        j = rand() % order.size();
-        if(i == j) {
-          continue;
-        }
-        best = min(best, {abs(i-j), {i, j}});
-      }
-      if(best.first == INT_MAX) {
-        continue;
-      }
+      // pair<int, pair<int,int>> best;
+      // best = make_pair(INT_MAX, make_pair(0, 0));
+      // for(int rep = 0; rep < 3; ++rep) {
+        // i = rand() % order.size();
+        // j = rand() % order.size();
+        // if(i == j) {
+          // continue;
+        // }
+        // best = min(best, {abs(i-j), {i, j}});
+      // }
+      // if(best.first == INT_MAX) {
+        // continue;
+      // }
       swap(new_order[i], new_order[j]);
     }
     else if(type == 3) {
@@ -126,11 +181,23 @@ int main(int argc, char* argv[]) {
       }
       new_order.erase(new_order.begin() + rand() % new_order.size());
     }
+    else if(type == 4) {
+      if(new_order.empty()) {
+        continue;
+      }
+      int i = rand() % new_order.size();
+      int s = rand() % min(5, (int) new_order.size() - i);
+      random_shuffle(new_order.begin() + i, new_order.begin() + i + s + 1);
+    }
     else {
       assert(false);
     }
     
-    long long new_score = estimate(new_order);
+    bool exact = rep > times - 20000; // times - 20,000 dziala dobrze w E
+    if(exact) {
+      current_score = estimate(order, true);
+    }
+    long long new_score = estimate(new_order, exact);
     if(new_score > current_score) {
       current_score = new_score;
       // cerr << current_score << ": " << new_order.size() << endl;
@@ -144,12 +211,54 @@ int main(int argc, char* argv[]) {
       }
     }
   }
-  cerr << estimate(order) << endl;
+  cerr << estimate(order, false) << endl;
+  cerr << estimate(order, true) << endl;
   ready = vector<bool>(L, false);
   // return 0;
+  
+  vector<pair<int,int>> stats(L);
+  {
+    int day = 0;
+    for(int il : order) {
+      day += libs[il].signup_time;
+      if(day >= D) {
+        break;
+      }
+      int can = min(1000LL * 1000, (long long) libs[il].per_day * (D - day));
+      stats[il] = make_pair(can, libs[il].books.size());
+    }
+  }
+  
+  vector<vector<int>> his_books(L);
+  long long total_score = 0;
+  for(int b : all_books) {
+    pair<int,int> best{INT_MIN, INT_MIN};
+    for(int il : where_is[b]) {
+      if(stats[il].first > 0) {
+        best = max(best, make_pair(stats[il].first - stats[il].second, il));
+      }
+    }
+    if(best.first == INT_MIN) {
+      continue;
+    }
+    int il = best.second;
+    total_score += score[b];
+    his_books[il].push_back(b);
+    stats[il].first--;
+    for(int il : where_is[b]) {
+      stats[il].second--;
+    }
+  }
+  
   vector<bool> scanned(B);
   int day = 0;
   vector<pair<int, vector<int>>> strategy;
+  for(int il : order) {
+    if(!his_books[il].empty()) {
+      strategy.emplace_back(il, his_books[il]);
+    }
+  }
+  /*
   long long total_score = 0;
   while(true) {
     // debug() << imie(day);
@@ -169,6 +278,7 @@ int main(int argc, char* argv[]) {
           return score[a] > score[b];
         });
         long long can = max(0, D - day - libs[il].signup_time) * (long long) libs[il].per_day;
+        cerr << "time = " << can << ",  " << remaining.size() << " / " << libs[il].books.size() << endl;
         if(can < (long long) remaining.size()) {
           remaining.resize(can);
         }
@@ -176,7 +286,7 @@ int main(int argc, char* argv[]) {
         for(int b : remaining) {
           gain += score[b];
         }
-        gain = gain * 1000 * 1000 / pow(libs[il].signup_time, 1.5);
+        gain = gain * 1000 * 1000 / pow(libs[il].signup_time, 1.);
         // assert(gain <= 1000 * 1000 * 1000);
         if(gain > best.first) {
           best = {(int) gain, {il, remaining}};
@@ -197,7 +307,7 @@ int main(int argc, char* argv[]) {
       total_score += score[b];
     }
     day += libs[il].signup_time;
-  }
+  }*/
   // cerr << endl;
   printf("%d\n", (int) strategy.size());
   for(pair<int, vector<int>> pp : strategy) {
@@ -207,23 +317,9 @@ int main(int argc, char* argv[]) {
     }
     puts("");
   }
-  // vector<int> his;
-  // long long can = (long long) libs[0].per_day * (D - libs[0].signup_time);
-  // for(int book : libs[0].books) {
-    // if(can > 0) {
-      // can--;
-      // his.push_back(book);
-    // }
-  // }
-  // puts("1"); // ile bibliotek
-  // printf("%d %d\n", 0, (int) his.size());
-  // long long result = 0;
-  // for(int x : his) {
-    // printf("%d ", x);
-    // result += score[x];
-  // }
-  // puts("");
-  cerr << "score = " << total_score / 1000. / 1000. << endl;
+  
+  
+  cerr << "score = " << total_score / 1000. / 1000. << " " << atoi(argv[1]) << endl;
 }
 
 
