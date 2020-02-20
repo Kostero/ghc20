@@ -34,10 +34,11 @@ int main(int argc, char** argv) {
       libs[il].read();
     }
   };
+  int signing_time = 0;
+  int signed_libraries = 0;
   auto read_output = [&](const string& output_file) -> int {
     freopen(output_file.c_str(), "r", stdin);
     int ret = 0;
-    int signing_time = 0;
     vector <bool> sign(L), scanned(B);
     int A;
     scanf("%d", &A);
@@ -50,7 +51,9 @@ int main(int argc, char** argv) {
       }
       sign[Y] = true;
       signing_time += libs[Y].signup_time;
-      int allowed_to_scan = (D - signing_time) * libs[Y].per_day;
+      if (signing_time > D) break;
+      signed_libraries++;
+      long long allowed_to_scan = 1LL * (D - signing_time) * libs[Y].per_day;
       if (allowed_to_scan < K) {
         printf("In library %d, you are allowed to scan only %d books"
                "after signing it on %d day.\n", Y, allowed_to_scan, signing_time);
@@ -75,5 +78,7 @@ int main(int argc, char** argv) {
   };
   read_input(input_file);
   printf("Score: %d\n", read_output(output_file));
+  printf("You signed %d libraries out of %d.\n", signed_libraries, L);
+  printf("Signing libarary took %.2f on average.\n", 1.0 * signing_time / signed_libraries);
   return 0;
 }
