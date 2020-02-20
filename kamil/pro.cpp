@@ -31,18 +31,24 @@ sim dor(const c&) { ris; }
 
 struct Lib {
   int n, signup_time, per_day;
-  vector<int> books;
-  void read() {
+  vector<int> books, sorted;
+  void read(const vector<int>& score) {
     scanf("%d%d%d", &n, &signup_time, &per_day);
     for(int i = 0; i < n; ++i) {
       int x;
       scanf("%d", &x);
       books.push_back(x);
+      sorted.push_back(score[x]);
+    }
+    sort(sorted.rbegin(), sorted.rend()); // decreasingly
+    for(int i = 1; i < (int) sorted.size(); ++i) {
+      sorted[i] += sorted[i-1]; // prefix sums
     }
   }
 };
 
-int main() {
+int main(int argc, char* argv[]) {
+  srand(atoi(argv[1]));
   int B, L, D;
   scanf("%d%d%d", &B, &L, &D);
   vector<int> score(B);
@@ -51,9 +57,97 @@ int main() {
   }
   vector<Lib> libs(L);
   for(int il = 0; il < L; ++il) {
-    libs[il].read();
+    libs[il].read(score);
   }
-  vector<bool> scanned(B), ready(L);
+  
+  auto estimate = [&](vector<int> order) {
+    int would = 0;
+    int day = 0;
+    for(int il : order) {
+      day += libs[il].signup_time;
+      if(day >= D) {
+        break;
+      }
+      long long _can = (long long) libs[il].per_day * (D - day);
+      // assert(_can <= 1000 * 1000 * 1000);
+      int can = min(1000LL * 1000 * 1000, _can);
+      can = min(can, (int) libs[il].books.size());
+      would += libs[il].sorted[can-1];
+    }
+    return would;
+  };
+  
+  vector<int> order;
+  vector<bool> ready(L);
+  long long current_score = 0;
+  for(int rep = 0; rep < 800000; ++rep) {
+    vector<int> new_order = order;
+    int type = rand() % 4;
+    if(type == 0) {
+      // insert
+      int i = rand() % L;
+      if(ready[i]) {
+        continue;
+      }
+      new_order.insert(new_order.begin() + rand() % (1 + new_order.size()), i);
+    }
+    else if(type == 1) {
+      // replace
+      int i = rand() % L;
+      if(ready[i] || order.empty()) {
+        continue;
+      }
+      new_order[rand() % order.size()] = i;
+    }
+    else if(type == 2) {
+      if(order.empty()) {
+        continue;
+      }
+      int i = rand() % order.size();
+      int j = rand() % order.size();
+      pair<int, pair<int,int>> best;
+      best = make_pair(INT_MAX, make_pair(0, 0));
+      for(int rep = 0; rep < 3; ++rep) {
+        i = rand() % order.size();
+        j = rand() % order.size();
+        if(i == j) {
+          continue;
+        }
+        best = min(best, {abs(i-j), {i, j}});
+      }
+      if(best.first == INT_MAX) {
+        continue;
+      }
+      swap(new_order[i], new_order[j]);
+    }
+    else if(type == 3) {
+      if(order.empty()) {
+        continue;
+      }
+      new_order.erase(new_order.begin() + rand() % new_order.size());
+    }
+    else {
+      assert(false);
+    }
+    
+    long long new_score = estimate(new_order);
+    if(new_score > current_score) {
+      current_score = new_score;
+      // cerr << current_score << ": " << new_order.size() << endl;
+      // ";
+      // for(int x : new_order) cerr << x << " ";
+      // cerr << endl;
+      order = new_order;
+      ready = vector<bool>(L, false);
+      for(int il : new_order) {
+        ready[il] = true;
+      }
+    }
+  }
+  cerr << estimate(order) << endl;
+  ready = vector<bool>(L, false);
+  // return 0;
+  vector<bool> scanned(B);
   int day = 0;
   vector<pair<int, vector<int>>> strategy;
   long long total_score = 0;
@@ -62,7 +156,8 @@ int main() {
     // cerr << day << " ";
     pair<long long, pair<int, vector<int>>> best;
     best.first = 0;
-    for(int il = 0; il < L; ++il) {
+    for(int il : order) {
+    // for(int il = 0; il < L; ++il) {
       if(!ready[il]) {
         vector<int> remaining;
         for(int b : libs[il].books) {
@@ -86,6 +181,7 @@ int main() {
         if(gain > best.first) {
           best = {(int) gain, {il, remaining}};
         }
+        break;
       }
     }
     if(best.first == 0) {
@@ -102,7 +198,7 @@ int main() {
     }
     day += libs[il].signup_time;
   }
-  cerr << endl;
+  // cerr << endl;
   printf("%d\n", (int) strategy.size());
   for(pair<int, vector<int>> pp : strategy) {
     printf("%d %d\n", pp.first, (int) pp.second.size());
