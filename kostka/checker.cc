@@ -36,6 +36,7 @@ int main(int argc, char** argv) {
   };
   int signing_time = 0;
   int signed_libraries = 0;
+  int scanned_books = 0;
   auto read_output = [&](const string& output_file) -> int {
     freopen(output_file.c_str(), "r", stdin);
     int ret = 0;
@@ -55,7 +56,7 @@ int main(int argc, char** argv) {
       signed_libraries++;
       long long allowed_to_scan = 1LL * (D - signing_time) * libs[Y].per_day;
       if (allowed_to_scan < K) {
-        printf("In library %d, you are allowed to scan only %d books"
+        printf("In library %d, you are allowed to scan only %lld books"
                "after signing it on %d day.\n", Y, allowed_to_scan, signing_time);
         exit(1);
       }
@@ -70,6 +71,7 @@ int main(int argc, char** argv) {
           printf("%d was already scanned.\n", B_id);
           exit(1);
         }
+        scanned_books += 1;
         scanned[B_id] = true;
         ret += score[B_id];
       }
@@ -77,8 +79,11 @@ int main(int argc, char** argv) {
     return ret;
   };
   read_input(input_file);
-  printf("Score: %d\n", read_output(output_file));
+  int final_score = read_output(output_file);
+  printf("Score: %d\n", final_score);
   printf("You signed %d libraries out of %d.\n", signed_libraries, L);
   printf("Signing libarary took %.2f on average.\n", 1.0 * signing_time / signed_libraries);
+  printf("Scanned books: %d out of %d.\n", scanned_books, B);
+  printf("Average score of the book: %.2f.\n", 1.0 * final_score / scanned_books);
   return 0;
 }
