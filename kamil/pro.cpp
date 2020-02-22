@@ -47,6 +47,182 @@ struct Lib {
   }
 };
 
+
+
+
+struct FastFlow {
+  using T = int;
+  struct E {
+    int dest;
+    T orig, *lim, *rev;
+  };
+  int zr, uj, n = 0;
+  vector<unique_ptr<T>> ts;
+  vector<vector<E>> graf;
+  vector<int> ptr, odl;
+  void vert(int v) {
+    n = max(n, v + 1);
+    graf.resize(n);
+    ptr.resize(n);
+    odl.resize(n);
+  }
+  bool iszero(T v) {
+    return !v; // Zmienić dla doubli.
+  }
+  void bfs() {
+    fill(odl.begin(), odl.end(), 0);
+    vector<int> kol = {zr};
+    odl[zr] = 1;
+    for (int i = 0; i < (int) kol.size(); i++) {
+      for (E& e : graf[kol[i]]) {
+        if (!odl[e.dest] and !iszero(*e.lim)) {
+          odl[e.dest] = odl[kol[i]] + 1;
+          kol.push_back(e.dest);
+        }
+      }
+    }
+  }
+  T dfs(int v, T lim) {
+    if (v == uj) return lim;
+    T ret = 0, wez;
+    for (int& i = ptr[v]; i < (int) graf[v].size(); i++) {
+      E& e = graf[v][i];
+      if (odl[e.dest] == odl[v] + 1 and !iszero(*e.lim) and
+          !iszero(wez = dfs(e.dest, min(*e.lim, lim)))) {
+        ret += wez;
+        *e.lim -= wez;
+        *e.rev += wez;
+        lim -= wez;
+        if (iszero(lim)) break;
+      }
+    }
+    return ret;
+  }
+  void add_edge(int u, int v, T lim, bool bi = false /* bidirectional? */) {
+    vert(max(u, v));
+    T *a = new T(lim), *b = new T(lim * bi);
+    ts.emplace_back(a);
+    ts.emplace_back(b);
+    graf[u].push_back(E{v, lim,      a, b});
+    graf[v].push_back(E{u, lim * bi, b, a});
+  }
+  T dinic(int zr_, int uj_) {
+    zr = zr_; uj = uj_;
+    vert(max(zr, uj));
+    T ret = 0;
+    while (true) {
+      bfs();
+      fill(ptr.begin(), ptr.end(), 0);
+      const T sta = dfs(zr, numeric_limits<T>::max());  // Dla doubli można dać
+      if (iszero(sta)) break;                           // infinity() zamiast
+      ret += sta;                                       // max().
+    }
+    return ret;
+  }
+  vector<int> cut() {
+    vector<int> ret;
+    bfs();
+    for (int i = 0; i < n; i++)
+      if (odl[i])
+        ret.push_back(i);
+    return ret;
+  }
+  map<pair<int, int>, T> get_flowing() {  // Tam gdzie plynie 0 może nie być
+    map<pair<int, int>, T> ret;           // krawędzi.
+    for (int i = 0; i < n; i++)
+      for (E& e : graf[i])
+        if (*e.lim < e.orig)
+          ret[make_pair(i, e.dest)] += e.orig - *e.lim;
+    for (auto& i : ret) {
+      const pair<int, int> rev{i.first.second, i.first.first};
+      const T x = min(i.second, ret[rev]);
+      i.second -= x;
+      ret[rev] -= x;
+    }
+    return ret;
+  }
+};
+
+
+struct Assignment {
+  int score;
+  vector<vector<int>> booksChosen;
+};
+
+Assignment optimal(const vector<Lib> &libs, int D, const vector<int> &scores, const vector<int> &order) {
+  Assignment res;
+  res.score = 0;
+  
+  FastFlow F;
+  int B = scores.size();
+  int L = libs.size();
+  int S = B + L + 1;
+  int T = B + L + 2;
+
+  vector<int> ready_time(L, D);
+  assert ((int) order.size() <= L);
+  int day = 0;
+  for (int i : order) {
+    ready_time[i] = day + libs[i].signup_time;
+    day += libs[i].signup_time;
+  }
+  assert (day <= D);
+
+  vector<pair<int, int>> booksByScore;
+
+  for (int i = 0; i < L; ++i) {
+    F.add_edge(S, i, min((long long) libs[i].per_day * (D - ready_time[i]), (long long) B));
+    for (int b : libs[i].books) {
+      F.add_edge(i, L + b, 1);
+    }
+  }
+
+  for (int i = 0; i < B; ++i) {
+    // F.add_edge(L + i, T, 1, 0);
+    booksByScore.push_back({scores[i], i});
+  }
+
+  sort (booksByScore.begin(), booksByScore.end(), greater<pair<int, int>> ());
+
+  int flo = F.dinic(S, T);
+
+  for (int i = 0; i < B; ++i) {
+    int bb = booksByScore[i].second;
+    F.add_edge(L + bb, T, 1);
+    // F.add_edge(S, L + bb, 1);
+    if (i + 1 == L || booksByScore[i + 1].first != booksByScore[i].first) {
+      if(booksByScore[i].first % 50 == 0) cerr << "scores " << booksByScore[i].first << endl;
+      flo += F.dinic(S, T);
+    }
+  }
+
+  auto flows = F.get_flowing();
+  
+  res.booksChosen.resize(L);
+  for (int i = 0; i < L; ++i) {
+    for (int b : libs[i].books) {
+      if (flows[{i, L + b}] > 0) res.booksChosen[i].push_back(b);
+    }
+  }
+
+  for (int i = 0; i < B; ++i) {
+    if (flows[{L + i, T}] == 1) res.score += scores[i]; 
+  }
+
+  return res;
+}
+
+
+
+
+
+
+
+
+
+
+
+
 int main(int argc, char* argv[]) {
   srand(atoi(argv[1]));
   int B, L, D;
@@ -75,7 +251,7 @@ int main(int argc, char* argv[]) {
     }
   }
   
-  auto estimate = [&](const vector<int>& order, bool exact) {
+  auto estimate = [&](const vector<int>& order, int exact) {
     if(!exact) {
       int would = 0;
       int day = 0;
@@ -87,11 +263,34 @@ int main(int argc, char* argv[]) {
         long long _can = (long long) libs[il].per_day * (D - day);
         // assert(_can <= 1000 * 1000 * 1000);
         int can = min(1000LL * 1000 * 1000, _can);
-        can = min(can, (int) llround(libs[il].books.size() * 0.95));
+        can = min(can, (int) llround(libs[il].books.size()));
         would += libs[il].sorted[can-1];
       }
       return would;
     }
+    else if(exact == 2) {
+          int day = 0;
+          vector<int> only;
+          for(int il : order) {
+            day += libs[il].signup_time;
+            if(day < D) {
+              only.push_back(il);
+            }
+            else {
+              day -= libs[il].signup_time;
+            }
+            // else {
+              // break;
+            // }
+          }
+          // order = only;
+          // for(int i = 0; i < (int) order.size(); ++i) {
+            // day += 
+        // }
+          
+            return optimal(libs, D, score, only).score;
+          }
+
     
           vector<pair<int,int>> stats(L);
         {
@@ -193,9 +392,9 @@ int main(int argc, char* argv[]) {
       assert(false);
     }
     
-    bool exact = rep > times - 20000; // times - 20,000 dziala dobrze w E
+    bool exact = rep > times - 1000; // times - 20,000 dziala dobrze w E
     if(exact) {
-      current_score = estimate(order, true);
+      current_score = estimate(order, exact);
     }
     long long new_score = estimate(new_order, exact);
     if(new_score > current_score) {
@@ -212,7 +411,11 @@ int main(int argc, char* argv[]) {
     }
   }
   cerr << estimate(order, false) << endl;
-  cerr << estimate(order, true) << endl;
+  auto exact = estimate(order, 2);
+  cerr << exact << endl;
+  // assert(exact <= 5237041);
+  // cerr << estimate(order, true) << endl;
+  
   ready = vector<bool>(L, false);
   // return 0;
   
